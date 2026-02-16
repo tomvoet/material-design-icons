@@ -76,7 +76,6 @@ const checkFonts = async (downloads, versions) => {
   await map(downloads, async ([_, file]) => {
     const { font, ligatures } = await processFont(file);
 
-    // Extract expected name and format from filename (e.g., "material-symbols-rounded.woff2")
     const basename = path.basename(file);
     const expectedFormat = basename.split('.').pop();
     const expectedName = titleCase(basename.replace(`.${expectedFormat}`, ''));
@@ -100,8 +99,6 @@ const checkFonts = async (downloads, versions) => {
         throw new Error(`Icon ${name} not found in ${path.relative('', file)}`);
       }
     }
-    
-    console.log(`Verified ${Object.keys(versions).length} icons for ${familyName} (${actualFormat})`);
   });
 };
 
