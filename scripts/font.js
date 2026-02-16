@@ -67,25 +67,56 @@ const getFontUrl = async (name, format, axes) => {
 const parseCss = (css) => {
   const name = css.match(/font-family: '([^']+)';/)[1];
   const src = css.match(/src: url\(([^\)]+)\) format\('([^']+)'\);/);
-  const url = src[1];
-  const format = src[2];
-  const extension = url.substring(url.lastIndexOf('.') + 1);
-  assertEquals(extension, format, 'font extension');
+  const [_, url, format] = src;
   return { name, url, format };
 };
 
 const checkFonts = async (downloads, versions) => {
   console.log('Checking fonts');
-  const files = downloads.map(([_, file]) => file);
-  await map(files, async (file) => {
-    const ligatures = await processFont(file);
+  await map(downloads, async ([_, file]) => {
+    const { font, ligatures } = await processFont(file);
+
+    // Extract expected name and format from filename (e.g., "material-symbols-rounded.woff2")
+    const basename = path.basename(file);
+    const expectedFormat = basename.split('.').pop();
+    const expectedName = titleCase(basename.replace(`.${expectedFormat}`, ''));
+
+    // Verify font family name starts with expected name
+    // (font may include style suffix like "Thin", "Regular", etc.)
+    const familyName = font.familyName || font.fullName || '';
+    if (!familyName.startsWith(expectedName)) {
+      throw new Error(
+        `font family name should start with '${expectedName}' not '${familyName}'`
+      );
+    }
+
+    // Verify font format matches
+    const actualFormat = getFontFormat(font);
+    assertEquals(actualFormat, expectedFormat, 'font format');
+
+    // Check all expected icons are present
     for (const name of Object.keys(versions)) {
       if (!ligatures[name]) {
         throw new Error(`Icon ${name} not found in ${path.relative('', file)}`);
       }
     }
+    
+    console.log(`Verified ${Object.keys(versions).length} icons for ${familyName} (${actualFormat})`);
   });
 };
+
+const getFontFormat = (font) => {
+  if (font.directory?.tag === 'wOF2' || font.type === 'WOFF2') {
+    return 'woff2';
+  }
+  if (font.directory?.tag === 'wOFF' || font.type === 'WOFF') {
+    return 'woff';
+  }
+
+  return font.type?.toLowerCase() || 'unknown';
+};
+
+const titleCase = (s) => s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
 const processFont = async (file) => {
   const open = promisify(fontkit.open);
@@ -114,7 +145,7 @@ const processFont = async (file) => {
       });
     });
   });
-  return ligatures;
+  return { font, ligatures };
 };
 
 const kebabCase = (s) => s.toLowerCase().replaceAll(' ', '-');
